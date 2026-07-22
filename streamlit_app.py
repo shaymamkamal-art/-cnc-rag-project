@@ -1,28 +1,23 @@
 """
-streamlit_app.py
-------------------
-Final stage: STREAMLIT UI.
+07_prompting.py
+-----------------
+Stage 7 of the pipeline: PROMPTING (context -> LLM answer).
 
-Wires the whole pipeline (01 -> 07) into a chat-style assistant for the
-EG Medical ZI 1 CNC/RAG project.
+Builds a grounded prompt from the chunks returned by
+06_retrieve_context.py and calls an LLM through OpenRouter to produce
+the final answer, with source citations.
 
-Deployment notes (Streamlit Cloud):
-    1. Push this whole project to a GitHub repo (see README for the
-       required file list).
-    2. On share.streamlit.io, create a new app pointing at this repo,
-       main file = streamlit_app.py.
-    3. In the deployed app: Manage app -> Secrets, paste:
-
-           OPENROUTER_API_KEY = "your_openrouter_key_here"
-           OPENROUTER_MODEL = "openai/gpt-4o-mini"
-
-    4. Do NOT put your real key in this file or in a committed .env.
+Per the project's API-key rules:
+    - The real key is NEVER hard-coded here.
+    - OPENROUTER_API_KEY / OPENROUTER_MODEL are read from environment
+      variables first (local .env via python-dotenv), and the
+      Streamlit app (streamlit_app.py) additionally falls back to
+      st.secrets when deployed on Streamlit Cloud.
 """
 
-import importlib.util
 import os
-
-import streamlit as st
+import importlib.util
+import requests
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -34,59 +29,84 @@ def _import_module(filename, module_name):
     return module
 
 
-rag = _import_module("07_prompting.py", "rag")
+retrieve_mod = _import_module("06_retrieve_context.py", "retrieve_mod")
 
-# ---------------------------------------------------------------------------
-# Read the API key/model from Streamlit secrets when deployed (falls back to
-# whatever 07_prompting.py already loaded from a local .env, if any).
-# ---------------------------------------------------------------------------
+# Try to load a local .env for local development only (safe to be absent).
 try:
-    if not rag.OPENROUTER_API_KEY:
-        rag.OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
-    rag.OPENROUTER_MODEL = st.secrets.get("OPENROUTER_MODEL", rag.OPENROUTER_MODEL)
+    from dotenv import load_dotenv
+    load_dotenv()
 except Exception:
     pass
 
-st.set_page_config(page_title="ZI 1 CNC RAG Assistant", page_icon="🛠️")
-st.title("🛠️ ZI 1 Implant CNC RAG Assistant")
-st.caption(
-    "Ask about the EG Medical ZI 1 dental implant system: catalog specs, "
-    "engineering drawings, and verified CNC machining programs "
-    "(O3710.NC, Platform3_4.NC, O3711.NC)."
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+SYSTEM_PROMPT = (
+    "You are a CNC/manufacturing assistant for the EG Medical ZI 1 dental "
+    "implant system. Answer ONLY using the provided context chunks. "
+    "Every factual claim in your answer must be traceable to one of the "
+    "given chunk IDs. If the context does not contain the answer, say so "
+    "plainly instead of guessing. Always end your answer with a "
+    "'Sources:' line listing the chunk IDs you used."
 )
 
-if not rag.OPENROUTER_API_KEY:
-    st.warning(
-        "No OPENROUTER_API_KEY found. The app will still retrieve and show "
-        "context, but won't generate an LLM answer until a key is configured "
-        "in Streamlit Secrets (or a local .env for development)."
+
+def build_prompt(query: str, chunks: list[dict]) -> str:
+    context_block = "\n\n".join(
+        f"[{c['chunk_id']}] {c['text']}" for c in chunks
+    )
+    return (
+        f"Context:\n{context_block}\n\n"
+        f"Question: {query}\n\n"
+        "Answer the question using only the context above, and cite the "
+        "chunk IDs you relied on."
     )
 
-if "history" not in st.session_state:
-    st.session_state.history = []
 
-top_k = st.sidebar.slider("Number of retrieved chunks (top_k)", min_value=1, max_value=8, value=3)
+def call_openrouter(prompt: str) -> str:
+    if not OPENROUTER_API_KEY:
+        return (
+            "[No OPENROUTER_API_KEY configured -- showing retrieved context "
+            "only. Set OPENROUTER_API_KEY to get a generated answer.]\n\n" + prompt
+        )
 
-for turn in st.session_state.history:
-    with st.chat_message(turn["role"]):
-        st.markdown(turn["content"])
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": OPENROUTER_MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+    }
+    response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
+    response.raise_for_status()
+    data = response.json()
+    return data["choices"][0]["message"]["content"]
 
-query = st.chat_input("Ask a question about the ZI 1 system or its CNC programs...")
 
-if query:
-    st.session_state.history.append({"role": "user", "content": query})
-    with st.chat_message("user"):
-        st.markdown(query)
+def answer_question(query: str, top_k: int = 3) -> dict:
+    """Full RAG call: retrieve -> prompt -> generate.
 
-    with st.chat_message("assistant"):
-        with st.spinner("Retrieving context and generating an answer..."):
-            result = rag.answer_question(query, top_k=top_k)
+    Returns {"answer": str, "chunks": list[dict]} so the caller (e.g.
+    streamlit_app.py) can show both the answer and the retrieved
+    evidence separately.
+    """
+    chunks = retrieve_mod.retrieve_context(query, top_k=top_k)
+    prompt = build_prompt(query, chunks)
+    answer = call_openrouter(prompt)
+    return {"answer": answer, "chunks": chunks}
 
-        st.markdown(result["answer"])
 
-        with st.expander("Show retrieved context (sources)"):
-            for c in result["chunks"]:
-                st.markdown(f"**[{c['chunk_id']}]** (distance={c['distance']:.3f})")
-                st.code(c["text"], language="text")
-
-    st.session_state.history.append({"role": "assistant", "content": result["answer"]})
+if __name__ == "__main__":
+    demo_query = "What internal hex wrench size is broached into the implant?"
+    result = answer_question(demo_query)
+    print("Q:", demo_query)
+    print("\nA:", result["answer"])
+    print("\nRetrieved chunks:")
+    for c in result["chunks"]:
+        print(f"  [{c['chunk_id']}] {c['text'][:80]}")
