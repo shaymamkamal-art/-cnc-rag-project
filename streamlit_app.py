@@ -129,15 +129,43 @@ h1, h2, h3 {
 }
 
 /* Expander */
-details {
+/* Expander - fixed professional spacing */
+div[data-testid="stExpander"] {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+
+div[data-testid="stExpander"] details {
     background-color: rgba(15, 22, 32, 0.75) !important;
     border: 1px solid rgba(100, 130, 170, 0.15) !important;
     border-radius: 12px !important;
+    padding: 0 !important;
 }
 
-details summary {
-    color: #94a3b8 !important;
-    font-weight: 500 !important;
+div[data-testid="stExpander"] summary {
+    padding: 0.85rem 1rem !important;
+    min-height: 52px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    white-space: normal !important;
+    line-height: 1.4 !important;
+}
+
+div[data-testid="stExpander"] summary p {
+    margin: 0 !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    color: #cbd5e1 !important;
+    line-height: 1.4 !important;
+}
+
+div[data-testid="stExpander"] summary svg {
+    flex-shrink: 0 !important;
+}
+
+div[data-testid="stExpander"] details[open] summary {
+    border-bottom: 1px solid rgba(100, 130, 170, 0.12) !important;
 }
 
 /* Code */
