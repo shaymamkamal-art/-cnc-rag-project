@@ -611,10 +611,10 @@ if query:
             unsafe_allow_html=True
         )
 
-        with st.expander(
-            f"📚 Sources ({len(result['chunks'])} chunks retrieved)"
-        ):
-            for i, c in enumerate(result["chunks"], 1):
+     with st.expander("📚 Retrieved Sources"):
+    st.caption(f"{len(result['chunks'])} chunks retrieved")
+
+    for i, c in enumerate(result["chunks"], 1):
                 st.markdown(
                     f"**{i}. Chunk** `{c['chunk_id']}` "
                     f"&nbsp;|&nbsp; **Distance:** `{c['distance']:.3f}`"
