@@ -16,6 +16,106 @@ def _import_module(filename, module_name):
 
 
 rag = _import_module("07_prompting.py", "rag")
+# ----------------------------
+# LOGIN SYSTEM
+# ----------------------------
+def check_login():
+    """Simple login system using Streamlit secrets."""
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+
+    if st.session_state.logged_in:
+        return True
+
+    # Login page styling
+    st.markdown("""
+    <style>
+    .login-box {
+        background: linear-gradient(145deg,
+            rgba(15, 23, 42, 0.9) 0%,
+            rgba(30, 41, 59, 0.8) 100%);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        border-radius: 20px;
+        padding: 2.5rem;
+        max-width: 420px;
+        margin: 4rem auto;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .login-title {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: #f1f5f9;
+        text-align: center;
+        margin-bottom: 0.3rem;
+    }
+
+    .login-subtitle {
+        font-size: 0.9rem;
+        color: #64748b;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .login-icon {
+        text-align: center;
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Center the login form
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        st.markdown("""
+        <div class="login-box">
+            <div class="login-icon">⚙️</div>
+            <div class="login-title">CNC RAG Assistant</div>
+            <div class="login-subtitle">Sign in to access the system</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("")
+
+        username = st.text_input(
+            "Username",
+            placeholder="Enter your username"
+        )
+        password = st.text_input(
+            "Password",
+            type="password",
+            placeholder="Enter your password"
+        )
+
+        if st.button("🔐 Sign In", use_container_width=True):
+            try:
+                users = dict(st.secrets.get("users", {}))
+                if username in users and users[username] == password:
+                    st.session_state.logged_in = True
+                    st.session_state.username = username
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid username or password")
+            except Exception:
+                st.error("❌ Login system not configured")
+
+        st.markdown(
+            "<div style='text-align:center; margin-top:1rem; "
+            "color:#475569; font-size:0.78rem;'>"
+            "Contact admin for access credentials"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+    return False
+
+
+# Check login before showing anything
+if not check_login():
+    st.stop()
 
 # ----------------------------
 # Load API key
