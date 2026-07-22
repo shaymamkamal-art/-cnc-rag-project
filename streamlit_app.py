@@ -90,6 +90,28 @@ def check_login():
             placeholder="Enter your password"
         )
 
+            st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div style="
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 10px;
+        padding: 0.7rem;
+        margin-bottom: 0.5rem;
+    ">
+        <div style="font-size:0.78rem; color:#64748b;">Signed in as</div>
+        <div style="font-size:0.95rem; font-weight:600; color:#e2e8f0;">
+            👤 {st.session_state.username}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("🚪 Sign Out", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.session_state.history = []
+        st.rerun()
         if st.button("🔐 Sign In", use_container_width=True):
             try:
                 users = dict(st.secrets.get("users", {}))
