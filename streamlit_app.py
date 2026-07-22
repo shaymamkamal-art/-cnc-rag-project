@@ -583,6 +583,9 @@ if not query and st.session_state.selected_prompt:
 # ----------------------------
 # Process Query
 # ----------------------------
+# ----------------------------
+# Process Query
+# ----------------------------
 if query:
     now = datetime.now().strftime("%H:%M")
 
@@ -611,15 +614,16 @@ if query:
             unsafe_allow_html=True
         )
 
-     with st.expander("📚 Retrieved Sources"):
-    st.caption(f"{len(result['chunks'])} chunks retrieved")
+        with st.expander("📚 Retrieved Sources"):
+            st.caption(f"{len(result['chunks'])} chunks retrieved")
 
-    for i, c in enumerate(result["chunks"], 1):
+            for i, c in enumerate(result["chunks"], 1):
                 st.markdown(
                     f"**{i}. Chunk** `{c['chunk_id']}` "
                     f"&nbsp;|&nbsp; **Distance:** `{c['distance']:.3f}`"
                 )
                 st.code(c["text"], language="text")
+
                 if i < len(result["chunks"]):
                     st.markdown(
                         '<div class="custom-divider"></div>',
