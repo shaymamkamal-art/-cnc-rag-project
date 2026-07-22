@@ -434,6 +434,83 @@ with st.sidebar:
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     if st.button("🗑 Clear Conversation", use_container_width=True):
+            st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+
+    st.markdown("### 📄 Upload Document")
+
+    uploaded_file = st.file_uploader(
+        "Add a PDF to the knowledge base",
+        type=["pdf"],
+        help="Upload a PDF and it will be added to the RAG knowledge base immediately."
+    )
+
+    if uploaded_file is not None:
+        if st.button("➕ Add to Knowledge Base", use_container_width=True):
+            with st.spinner("Processing PDF..."):
+                try:
+                    doc_mgr = _import_module(
+                        "document_manager.py", "doc_mgr"
+                    )
+                    result = doc_mgr.add_pdf_to_store(
+                        uploaded_file.read(),
+                        uploaded_file.name
+                    )
+
+                    if result["status"] == "success":
+                        st.success(
+                            f"✅ Added **{result['filename']}**\n\n"
+                            f"Chunks added: **{result['chunks_added']}**"
+                        )
+                    else:
+                        st.error(f"❌ {result['status']}")
+
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
+
+    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+
+    st.markdown("### 📚 Knowledge Base")
+
+    if st.button("🔄 Refresh Document List", use_container_width=True):
+        st.rerun()
+
+    try:
+        doc_mgr = _import_module("document_manager.py", "doc_mgr")
+        docs = doc_mgr.list_uploaded_docs()
+
+        if docs:
+            for doc in docs:
+                col_a, col_b = st.columns([3, 1])
+                with col_a:
+                    icon = "📤" if doc["uploaded"] else "📋"
+                    st.markdown(
+                        f"{icon} **{doc['source']}**\n\n"
+                        f"<span style='color:#64748b; font-size:0.78rem;'>"
+                        f"{doc['chunks']} chunks</span>",
+                        unsafe_allow_html=True
+                    )
+                with col_b:
+                    if st.button(
+                        "🗑",
+                        key=f"del_{doc['doc_id']}",
+                        help=f"Remove {doc['source']}"
+                    ):
+                        result = doc_mgr.delete_doc_from_store(doc["doc_id"])
+                        if result["status"] == "deleted":
+                            st.success("Removed!")
+                            st.rerun()
+        else:
+            st.markdown(
+                "<span style='color:#475569; font-size:0.85rem;'>"
+                "No documents found.</span>",
+                unsafe_allow_html=True
+            )
+
+    except Exception as e:
+        st.markdown(
+            f"<span style='color:#ef4444;'>Error loading docs: {e}</span>",
+            unsafe_allow_html=True
+        )
         st.session_state.history = []
         st.session_state.query_count = 0
         st.session_state.selected_prompt = ""
