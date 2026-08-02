@@ -1,4 +1,4 @@
-# ZI 1 Implant CNC RAG Assistant
+# SM Implant CNC RAG Assistant
 
 A simple retrieval-augmented generation (RAG) project for the EG Medical
 ZI 1 dental implant system: catalog specs, one engineering drawing, and
