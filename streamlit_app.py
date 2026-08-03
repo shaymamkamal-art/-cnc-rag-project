@@ -72,6 +72,7 @@ div[data-testid="stExpander"] details {
     background-color: rgba(15, 22, 32, 0.75) !important;
     border: 1px solid rgba(100, 130, 170, 0.15) !important;
     border-radius: 12px !important;
+    margin-top: 0.4rem !important;
 }
 div[data-testid="stExpander"] summary {
     padding: 0.85rem 1rem !important;
@@ -166,7 +167,6 @@ code {
     color: #e2e8f0;
 }
 .metric-desc { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
-.msg-time { font-size: 0.7rem; color: #475569; margin-top: 0.3rem; }
 .custom-divider {
     height: 1px;
     background: linear-gradient(90deg,
@@ -211,6 +211,13 @@ if "query_count" not in st.session_state:
 # -----------------------------------------------------------------------
 # LOGIN PAGE
 # -----------------------------------------------------------------------
+def _configured_users() -> dict:
+    try:
+        return dict(st.secrets.get("users", {}))
+    except Exception:
+        return {}
+
+
 def show_login():
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
@@ -242,20 +249,26 @@ def show_login():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
+        # Fixed: tell the operator directly if no [users] table exists yet,
+        # instead of letting every login attempt fail with a generic error.
+        users = _configured_users()
+        if not users:
+            st.info(
+                "⚠️ No login users are configured yet. Add a `[users]` table "
+                "to Streamlit Secrets, e.g.:\n\n"
+                "```toml\n[users]\nadmin = \"your-password-here\"\n```"
+            )
+
         username = st.text_input("Username", placeholder="Enter your username")
         password = st.text_input("Password", type="password", placeholder="Enter your password")
 
         if st.button("🔐 Sign In", use_container_width=True):
-            try:
-                users = dict(st.secrets.get("users", {}))
-                if username in users and users[username] == password:
-                    st.session_state.logged_in = True
-                    st.session_state.username = username
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid username or password")
-            except Exception:
-                st.error("❌ Login system not configured in Secrets")
+            if username in users and users[username] == password:
+                st.session_state.logged_in = True
+                st.session_state.username = username
+                st.rerun()
+            else:
+                st.error("❌ Invalid username or password")
 
         st.markdown("""
         <div style="text-align:center; margin-top:1rem;
@@ -387,11 +400,15 @@ with st.sidebar:
                         unsafe_allow_html=True
                     )
                 with col_b:
-                    if st.button("🗑", key=f"del_{doc['doc_id']}"):
-                        res = doc_mgr.delete_doc_from_store(doc["doc_id"])
-                        if res["status"] == "deleted":
-                            st.success("Removed!")
-                            st.rerun()
+                    # Only uploaded docs are deletable -- the original
+                    # pipeline knowledge (G-code/catalog/drawings/CAD) is
+                    # protected and has no delete button at all.
+                    if doc["uploaded"]:
+                        if st.button("🗑", key=f"del_{doc['doc_id']}"):
+                            res = doc_mgr.delete_doc_from_store(doc["doc_id"])
+                            if res["status"] == "deleted":
+                                st.success("Removed!")
+                                st.rerun()
         else:
             st.markdown(
                 "<span style='color:#475569; font-size:0.85rem;'>"
@@ -524,14 +541,16 @@ st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 # -----------------------------------------------------------------------
 # CHAT HISTORY
 # -----------------------------------------------------------------------
+# Fixed: the timestamp is now rendered with st.caption (a native
+# Streamlit element) instead of a raw <div> immediately followed by
+# st.expander -- mixing raw HTML directly against a native widget like
+# that is what caused the "Retrieved Sources" row to visually overlap
+# the timestamp in the screenshot.
 for turn in st.session_state.history:
     with st.chat_message(turn["role"]):
         st.markdown(turn["content"])
         if "time" in turn:
-            st.markdown(
-                f'<div class="msg-time">{turn["time"]}</div>',
-                unsafe_allow_html=True
-            )
+            st.caption(turn["time"])
 
 
 # -----------------------------------------------------------------------
@@ -558,10 +577,7 @@ if query:
 
     with st.chat_message("user"):
         st.markdown(query)
-        st.markdown(
-            f'<div class="msg-time">{now}</div>',
-            unsafe_allow_html=True
-        )
+        st.caption(now)
 
     with st.chat_message("assistant"):
         with st.spinner("🔍 Retrieving context and generating answer..."):
@@ -570,10 +586,7 @@ if query:
         st.markdown(result["answer"])
 
         ans_time = datetime.now().strftime("%H:%M")
-        st.markdown(
-            f'<div class="msg-time">{ans_time}</div>',
-            unsafe_allow_html=True
-        )
+        st.caption(ans_time)
 
         with st.expander("📚 Retrieved Sources"):
             st.caption(f"{len(result['chunks'])} chunks retrieved")
