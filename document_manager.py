@@ -111,7 +111,11 @@ def add_pdf_to_store(pdf_bytes: bytes, filename: str) -> dict:
     clean = clean_text(raw_text)
 
     # 3. Make doc_id from filename
-    doc_id = re.sub(r'[^a-zA-Z0-9_-]', '_', filename.replace('.pdf', ''))
+    # FIX: prefix with "UPLOAD-" so uploaded docs can NEVER collide with
+    # (or be confused for) a protected pipeline doc_id like "CAT-3" or
+    # "NC-O3710-OP0" -- this is what delete_doc_from_store below checks.
+    raw_id = re.sub(r'[^a-zA-Z0-9_-]', '_', filename.replace('.pdf', ''))
+    doc_id = f"UPLOAD-{raw_id}"
 
     # 4. Chunk
     pieces = chunk_text(clean)
@@ -181,7 +185,12 @@ def list_uploaded_docs() -> list[dict]:
     """Return list of documents currently in the Chroma store."""
     try:
         client = store_mod.get_chroma_client()
-        collection = client.get_collection(store_mod.COLLECTION_NAME)
+        try:
+            collection = client.get_collection(store_mod.COLLECTION_NAME)
+        except Exception:
+            # FIX: fall back to building the store on a fresh deployment,
+            # same as add_pdf_to_store does, instead of silently returning [].
+            collection = store_mod.build_store()
         results = collection.get()
 
         docs = {}
@@ -206,7 +215,17 @@ def list_uploaded_docs() -> list[dict]:
 # Delete a document
 # -------------------------------------------------------------------
 def delete_doc_from_store(doc_id: str) -> dict:
-    """Remove all chunks of a document from Chroma."""
+    """Remove all chunks of a document from Chroma.
+
+    FIX: refuses to delete anything that isn't a real uploaded
+    document (doc_id must start with "UPLOAD-"). This protects the
+    17 original pipeline documents (G-code, catalog, drawings, CAD
+    facts) from ever being deleted through this function, no matter
+    how it gets called.
+    """
+    if not doc_id.startswith("UPLOAD-"):
+        return {"status": "protected", "doc_id": doc_id}
+
     try:
         client = store_mod.get_chroma_client()
         collection = client.get_collection(store_mod.COLLECTION_NAME)
