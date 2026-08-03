@@ -1,0 +1,2 @@
+cadquery>=2.4
+typing-extensions>=4.0.0
