@@ -162,7 +162,7 @@ def call_openrouter(prompt: str, system_prompt: str) -> str:
 # -------------------------------------------------------------------
 # Main function
 # -------------------------------------------------------------------
-def answer_question(query: str, top_k: int = 3) -> dict:
+def answer_question(query: str, top_k: int = 6) -> dict:
     """Full RAG call: retrieve -> detect language -> prompt -> generate.
 
     Returns:
@@ -178,6 +178,23 @@ def answer_question(query: str, top_k: int = 3) -> dict:
     # Step 2: Detect language
     arabic = _is_arabic(query)
     language = "ar" if arabic else "en"
+
+    # Step 2.5: Hard stop -- if retrieval found NOTHING relevant, do not
+    # call the LLM at all. An empty context block is an open invitation
+    # for the model to hallucinate an answer from its own general
+    # knowledge instead of admitting it doesn't know. Never trust the
+    # LLM to self-police this.
+    if not chunks:
+        no_context_msg = (
+            "لا يوجد سياق كافٍ في قاعدة المعرفة للإجابة على هذا السؤال.\n\nالمصادر: لا يوجد."
+            if arabic else
+            "No sufficiently relevant context was found in the knowledge base to answer this question.\n\nSources: None."
+        )
+        return {
+            "answer": no_context_msg,
+            "chunks": [],
+            "language": language
+        }
 
     # Step 3: Build prompt
     prompt = build_prompt(query, chunks, is_arabic=arabic)
