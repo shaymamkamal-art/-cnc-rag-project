@@ -1,75 +1,31 @@
-"""
-06_retrieve_context.py
-------------------------
-Stage 6 of the pipeline: CONTEXT RETRIEVAL.
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever
+from langchain_community.vectorstores import Chroma
 
-Given a user question, embeds it (04) and queries the persisted Chroma
-collection (05) for the top-k most relevant chunks.
+# 1. إعداد الـ Vector Retriever (ChromaDB)
+# نفترض أنكِ قمتِ بتعريف الـ vectorstore مسبقاً
+vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-This is the ONLY file that 07_prompting.py and streamlit_app.py should
-import to fetch context -- they should never talk to Chroma directly.
-"""
+# 2. إعداد الـ Keyword Retriever (BM25)
+# استخراج النصوص من الـ vectorstore لتغذية خوارزمية BM25
+# (يتم تمرير قائمة الـ documents التي تم تقطيعها مسبقاً)
+all_documents = vectorstore.get()['documents'] 
+bm25_retriever = BM25Retriever.from_texts(all_documents)
+bm25_retriever.k = 3 # جلب أفضل 3 نتائج تطابق الكلمات حرفياً
 
-import os
-import importlib.util
+# 3. دمج الاثنين في مُسترجِع هجين (Hybrid)
+# يتم تحديد الأوزان (weights): هنا أعطينا 50% للبحث الدلالي و 50% للبحث الحرفي
+hybrid_retriever = EnsembleRetriever(
+    retrievers=[vector_retriever, bm25_retriever],
+    weights=[0.5, 0.5] 
+)
 
-_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+# 4. تنفيذ الاستعلام
+query = "What CNC programs are referenced for the ZI 1 implant?"
+hybrid_results = hybrid_retriever.invoke(query)
 
-
-def _import_module(filename, module_name):
-    spec = importlib.util.spec_from_file_location(module_name, os.path.join(_THIS_DIR, filename))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-store_mod = _import_module("05_create_chroma_store.py", "store_mod")
-vector_mod = _import_module("04_vector_representation.py", "vector_mod")
-
-_collection = None
-
-
-def _get_collection():
-    """Open the existing persisted collection (build it once if missing)."""
-    global _collection
-    if _collection is not None:
-        return _collection
-
-    client = store_mod.get_chroma_client()
-    try:
-        _collection = client.get_collection(store_mod.COLLECTION_NAME)
-    except Exception:
-        # First run on a fresh machine / fresh Streamlit Cloud instance:
-        # nothing persisted yet, so build the store now.
-        _collection = store_mod.build_store()
-    return _collection
-
-
-def retrieve_context(query: str, top_k: int = 3) -> list[dict]:
-    """Return the top_k most relevant chunks for `query`.
-
-    Each result: {"chunk_id", "text", "source", "metadata", "distance"}
-    """
-    collection = _get_collection()
-    query_vec = vector_mod.embed_query(query)
-
-    result = collection.query(query_embeddings=[query_vec], n_results=top_k)
-
-    hits = []
-    for i in range(len(result["ids"][0])):
-        hits.append({
-            "chunk_id": result["ids"][0][i],
-            "text": result["documents"][0][i],
-            "metadata": result["metadatas"][0][i],
-            "source": result["metadatas"][0][i].get("source"),
-            "distance": result["distances"][0][i],
-        })
-    return hits
-
-
-if __name__ == "__main__":
-    demo_query = "What internal hex wrench size is broached into the implant?"
-    hits = retrieve_context(demo_query, top_k=3)
-    print(f"Query: {demo_query}\n")
-    for h in hits:
-        print(f"  [{h['chunk_id']}] (distance={h['distance']:.3f}) {h['text'][:90]}")
+# طباعة النتائج للتأكد من جلب التشونك الصحيح
+for i, doc in enumerate(hybrid_results):
+    print(f"--- النتيجة {i+1} ---")
+    print(doc.page_content)
+    print("\n")
