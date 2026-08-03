@@ -64,7 +64,7 @@ def retrieve_context(query: str, top_k: int = 3) -> list[dict]:
             "source": result["metadatas"][0][i].get("source"),
             "distance": result["distances"][0][i],
         })
-        print("=" * 80)
+      print("=" * 80)
 print("QUERY:", query)
 
 for h in hits:
@@ -74,7 +74,8 @@ for h in hits:
     print(h["text"][:600])
 
 print("=" * 80)
-    return hits
+
+return hits
 
 
 if __name__ == "__main__":
