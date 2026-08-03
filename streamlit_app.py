@@ -34,7 +34,17 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-* { font-family: 'Inter', sans-serif !important; }
+
+/* Fix: Apply Inter font safely without breaking Streamlit icon fonts */
+html, body, .stApp, p, div, button, input, textarea, label {
+    font-family: 'Inter', sans-serif;
+}
+
+/* Preserve Streamlit Material Icons */
+[data-testid="stIcon"], [class*="material-symbols"], i {
+    font-family: inherit !important;
+}
+
 .stApp {
     background: linear-gradient(160deg, #080d13 0%, #0f1923 40%, #152232 100%);
     color: #e6edf3;
@@ -183,12 +193,6 @@ code {
     color: #475569;
     font-size: 0.8rem;
 }
-.login-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 80vh;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -249,8 +253,6 @@ def show_login():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Fixed: tell the operator directly if no [users] table exists yet,
-        # instead of letting every login attempt fail with a generic error.
         users = _configured_users()
         if not users:
             st.info(
@@ -400,9 +402,6 @@ with st.sidebar:
                         unsafe_allow_html=True
                     )
                 with col_b:
-                    # Only uploaded docs are deletable -- the original
-                    # pipeline knowledge (G-code/catalog/drawings/CAD) is
-                    # protected and has no delete button at all.
                     if doc["uploaded"]:
                         if st.button("🗑", key=f"del_{doc['doc_id']}"):
                             res = doc_mgr.delete_doc_from_store(doc["doc_id"])
@@ -519,21 +518,25 @@ with q1:
         st.session_state.selected_prompt = (
             "What internal hex wrench size is broached into the implant?"
         )
+        st.rerun()
 with q2:
     if st.button("📐 Platform dimensions", use_container_width=True):
         st.session_state.selected_prompt = (
             "What are the main platform dimensions in the ZI 1 system?"
         )
+        st.rerun()
 with q3:
     if st.button("💻 CNC programs", use_container_width=True):
         st.session_state.selected_prompt = (
             "What CNC programs are referenced for the ZI 1 implant?"
         )
+        st.rerun()
 with q4:
     if st.button("🇪🇬 اسأل بالعربي", use_container_width=True):
         st.session_state.selected_prompt = (
             "ما هي أهم المواصفات الفنية لنظام ZI 1؟"
         )
+        st.rerun()
 
 st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
@@ -541,11 +544,6 @@ st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 # -----------------------------------------------------------------------
 # CHAT HISTORY
 # -----------------------------------------------------------------------
-# Fixed: the timestamp is now rendered with st.caption (a native
-# Streamlit element) instead of a raw <div> immediately followed by
-# st.expander -- mixing raw HTML directly against a native widget like
-# that is what caused the "Retrieved Sources" row to visually overlap
-# the timestamp in the screenshot.
 for turn in st.session_state.history:
     with st.chat_message(turn["role"]):
         st.markdown(turn["content"])
@@ -554,7 +552,7 @@ for turn in st.session_state.history:
 
 
 # -----------------------------------------------------------------------
-# CHAT INPUT
+# CHAT INPUT & EXECUTION
 # -----------------------------------------------------------------------
 query = st.chat_input("Ask your CNC question... / اكتب سؤالك هنا...")
 
@@ -563,9 +561,6 @@ if not query and st.session_state.selected_prompt:
     st.session_state.selected_prompt = ""
 
 
-# -----------------------------------------------------------------------
-# PROCESS QUERY
-# -----------------------------------------------------------------------
 if query:
     now = datetime.now().strftime("%H:%M")
 
@@ -609,6 +604,7 @@ if query:
     })
 
     st.session_state.query_count += 1
+    st.rerun()
 
 
 # -----------------------------------------------------------------------
